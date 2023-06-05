@@ -1,4 +1,5 @@
 import argparse
+import os
 import pandas
 
 EXPECTED_KEYFILE_COLUMNS = [
@@ -63,6 +64,7 @@ def main():
         dam_info['perc.cap'] = -1
         result_df = pandas.concat([dam_info, result_df], ignore_index=True)
     print(result_df)
+    result_df.to_csv(args.target_table_path, index=False)
 
 
 if __name__ == '__main__':
