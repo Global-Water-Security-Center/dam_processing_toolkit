@@ -3,17 +3,7 @@ import os
 import pandas
 import re
 
-EXPECTED_KEYFILE_COLUMNS = [
-    'GDW_ID',
-    'GRAND_ID',
-    'DAM_NAME',
-    'COUNTRY',
-    'YEAR_',
-    'AREA_SKM',
-    'CAP_MCM',
-    'MAIN_USE',
-    'GDW_NUM',
-    ]
+DAM_COL_ID = 'GWD_ID'
 
 
 def is_int(value):
@@ -46,13 +36,13 @@ def main():
         'fullness statistics.'))
     parser.add_argument(
         'dam_definition_path', help=(
-            'Path to csv that contains column names of ' +
-            ', '.join(EXPECTED_KEYFILE_COLUMNS)))
+            'Path to csv that contains at least a column with a unique id '
+            f'of {DAM_COL_ID}.'))
     parser.add_argument(
         'dam_fullness_path', help=(
             'Path to csv that contains a date column followd by N id columns '
-            'that correspond to the GWD_ID in the `dam_definition_path` '
-            'table.'))
+            f'that correspond to the {DAM_COL_ID} in the '
+            '`dam_definition_path` table.'))
     parser.add_argument(
         'start_month_day', help='Yearly day to start the historical analysis.',
         type=valid_month_date)
@@ -70,7 +60,11 @@ def main():
         raise ValueError(
             f'{args.target_table_path} already exists, will not overwrite')
     dam_definition_table = pandas.read_csv(
-        args.dam_definition_path, usecols=EXPECTED_KEYFILE_COLUMNS)
+        args.dam_definition_path)
+    if 'GWD_ID' not in dam_definition_table:
+        raise ValueError(
+            "Expected a coulumn named 'GWD_ID' but one was not found in "
+            "the table.")
     dam_fullness_table = pandas.read_csv(args.dam_fullness_path)
     dam_fullness_table['Dates'] = pandas.to_datetime(
         dam_fullness_table['Dates'])
@@ -93,28 +87,31 @@ def main():
         if not is_int(dam_id):
             continue
         dam_id = int(dam_id)
-        if not dam_definition_table['GDW_ID'].isin([dam_id]).any():
+        if not dam_definition_table[DAM_COL_ID].isin([dam_id]).any():
             continue
-        dam_fullness_col = dam_fullness_table[[str(dam_id)]]
         analysis_day = pandas.Timestamp(args.analysis_year_month_day)
         closest_date_index = (
             (dam_fullness_table['Dates'] - analysis_day).abs()).idxmin()
         analysis_day_surface_area = dam_fullness_table.loc[
             closest_date_index, str(dam_id)]
         dam_info = dam_definition_table[
-            dam_definition_table['GDW_ID'] == dam_id].to_dict(
+            dam_definition_table[DAM_COL_ID] == dam_id].to_dict(
                 orient='records')[0]
+        local_dam_fullness_table = dam_fullness_table[
+            dam_fullness_table['Dates'].dt.year >= dam_info['YEAR_']]
+        dam_fullness_col = local_dam_fullness_table[[str(dam_id)]]
+
         print(dam_info)
         print(dam_fullness_col.mean())
         print(dam_info['AREA_SKM'])
         dam_info['res.m'] = dam_fullness_col.mean()
-        dam_info['perc.mean'] = dam_fullness_col.mean() / dam_info['AREA_SKM'] * 100
-        dam_info['perc.cap'] = analysis_day_surface_area / dam_info['AREA_SKM'] * 100
+        dam_info['perc.mean'] = (
+            dam_fullness_col.mean() / dam_info['AREA_SKM'] * 100)
+        dam_info['perc.cap'] = (
+            analysis_day_surface_area / dam_info['AREA_SKM'] * 100)
         print(dam_info)
-        #dam_info['analysis_date'] = args.analysis_year_month_day
-        local_dam_fullness_table = dam_fullness_table[
-            dam_fullness_table['Dates'].dt.year >= dam_info['YEAR_']]
-        result_df = pandas.concat([pandas.DataFrame(dam_info), result_df], ignore_index=True)
+        result_df = pandas.concat(
+            [pandas.DataFrame(dam_info), result_df], ignore_index=True)
     result_df['analysis_date'] = args.analysis_year_month_day
     print(result_df)
     result_df.to_csv(args.target_table_path, index=False)
