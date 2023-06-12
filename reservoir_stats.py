@@ -3,7 +3,7 @@ import os
 import pandas
 import re
 
-DAM_COL_ID = 'GWD_ID'
+DAM_COL_ID = 'GDW_ID'
 
 
 def is_int(value):
@@ -61,9 +61,9 @@ def main():
             f'{args.target_table_path} already exists, will not overwrite')
     dam_definition_table = pandas.read_csv(
         args.dam_definition_path)
-    if 'GWD_ID' not in dam_definition_table:
+    if DAM_COL_ID not in dam_definition_table:
         raise ValueError(
-            "Expected a coulumn named 'GWD_ID' but one was not found in "
+            f"Expected a coulumn named {DAM_COL_ID} but one was not found in "
             "the table.")
     dam_fullness_table = pandas.read_csv(args.dam_fullness_path)
     dam_fullness_table['Dates'] = pandas.to_datetime(
