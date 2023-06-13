@@ -44,11 +44,16 @@ def main():
             f'that correspond to the {DAM_COL_ID} in the '
             '`dam_definition_path` table.'))
     parser.add_argument(
-        'start_month_day', help='Yearly day to start the historical analysis.',
+        'start_month_day',
+        help='Yearly day to start the seasonal historical analysis.',
         type=valid_month_date)
     parser.add_argument(
-        'end_month_day', help='Yearly day to end the historical analysis.',
+        'end_month_day',
+        help='Yearly day to end the seasonal historical analysis.',
         type=valid_month_date)
+    parser.add_argument(
+        'historical_year_range',
+        help='historical start and end year range in YYYY-YYYY')
     parser.add_argument(
         'analysis_year_month_day', help='YYYY-MM-DD to do the analysis on.',
         type=valid_year_month_date)
@@ -65,6 +70,9 @@ def main():
         raise ValueError(
             f"Expected a coulumn named {DAM_COL_ID} but one was not found in "
             "the table.")
+
+    historic_start_year, historic_end_year = [
+        int(year) for year in args.historical_year_range.split('-')]
     dam_fullness_table = pandas.read_csv(args.dam_fullness_path)
     dam_fullness_table['Dates'] = pandas.to_datetime(
         dam_fullness_table['Dates'])
@@ -98,7 +106,9 @@ def main():
             dam_definition_table[DAM_COL_ID] == dam_id].to_dict(
                 orient='records')[0]
         local_dam_fullness_table = dam_fullness_table[
-            dam_fullness_table['Dates'].dt.year >= dam_info['YEAR_']]
+            (dam_fullness_table['Dates'].dt.year >= dam_info['YEAR_']) &
+            (dam_fullness_table['Dates'].dt.year >= historic_start_year) &
+            (dam_fullness_table['Dates'].dt.year <= historic_end_year)]
         dam_fullness_col = local_dam_fullness_table[[str(dam_id)]]
 
         print(dam_info)
