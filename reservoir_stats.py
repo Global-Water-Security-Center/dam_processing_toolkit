@@ -106,7 +106,7 @@ def main():
         print(dam_info['AREA_SKM'])
         dam_info['res.m'] = dam_fullness_col.mean()
         dam_info['perc.mean'] = (
-            dam_fullness_col.mean() / dam_info['AREA_SKM'] * 100)
+            analysis_day_surface_area / dam_fullness_col.mean() * 100)
         dam_info['perc.cap'] = (
             analysis_day_surface_area / dam_info['AREA_SKM'] * 100)
         print(dam_info)
