@@ -58,12 +58,21 @@ def main():
         'analysis_year_month_day', help='YYYY-MM-DD to do the analysis on.',
         type=valid_year_month_date)
     parser.add_argument(
-        'target_table_path', help='Path to target table, will not overwrite')
+        'target_table_means_path',
+        help='Path to target table, will not overwrite')
+    parser.add_argument(
+        '--target_table_daily_fullness_path', help=(
+            'Path to target table that shows fullness of all dams by day, '
+            'will not overwrite'))
     parser.add_argument('--force', action='store_true')
     args = parser.parse_args()
-    if os.path.exists(args.target_table_path) and not args.force:
-        raise ValueError(
-            f'{args.target_table_path} already exists, will not overwrite')
+    for table_path in [args.target_table_means_path,
+                       args.target_table_daily_fullness_path]:
+        if table_path is None:
+            continue
+        if os.path.exists(table_path) and not args.force:
+            raise ValueError(
+                f'{table_path} already exists, will not overwrite')
     dam_definition_table = pandas.read_csv(
         args.dam_definition_path)
     if DAM_COL_ID not in dam_definition_table:
@@ -88,9 +97,39 @@ def main():
             ((dam_fullness_table['Dates'].dt.month <= end_month) &
              (dam_fullness_table['Dates'].dt.day <= end_day))])
 
-    result_df = pandas.DataFrame(
+    result_mean_fullness_df = pandas.DataFrame(
         columns=['analysis_date'] + list(dam_definition_table.columns)+[
             'res.m', 'perc.mean', 'perc.cap'])
+    # 'current_km2_surface_area'
+    if args.target_table_daily_fullness_path:
+        merged_dfs = []
+        target_table_all_fullness = pandas.DataFrame()
+        for dam_id in dam_fullness_table:
+            if not is_int(dam_id):
+                continue
+            dam_id = int(dam_id)
+            if not dam_definition_table[DAM_COL_ID].isin([dam_id]).any():
+                continue
+            # Filter table A by the current DAM_COL_ID
+            dam_id_str = str(dam_id)
+            subset_a = dam_definition_table[
+                dam_definition_table[DAM_COL_ID] == dam_id]
+            subset_b = dam_fullness_table[[dam_id_str, 'Dates']]
+            subset_b = subset_b.rename(
+                columns={dam_id_str: 'current_km2_surface_area'})
+            subset_b[DAM_COL_ID] = dam_id
+            merged = pandas.merge(
+                subset_a, subset_b, on=DAM_COL_ID, how='outer')
+            merged_dfs.append(merged)
+
+        target_table_all_fullness = pandas.concat(
+            merged_dfs, ignore_index=True)
+        target_table_all_fullness.to_csv(
+            args.target_table_daily_fullness_path, index=False)
+        print(
+            f"Dam 'daily fullness' table written to "
+            f"{args.target_table_daily_fullness_path}")
+
     for dam_id in dam_fullness_table:
         if not is_int(dam_id):
             continue
@@ -111,20 +150,18 @@ def main():
             (dam_fullness_table['Dates'].dt.year <= historic_end_year)]
         dam_fullness_col = local_dam_fullness_table[[str(dam_id)]]
 
-        print(dam_info)
-        print(dam_fullness_col.mean())
-        print(dam_info['AREA_SKM'])
         dam_info['res.m'] = dam_fullness_col.mean()
         dam_info['perc.mean'] = (
             analysis_day_surface_area / dam_fullness_col.mean() * 100)
         dam_info['perc.cap'] = (
             analysis_day_surface_area / dam_info['AREA_SKM'] * 100)
-        print(dam_info)
-        result_df = pandas.concat(
-            [pandas.DataFrame(dam_info), result_df], ignore_index=True)
-    result_df['analysis_date'] = args.analysis_year_month_day
-    print(result_df)
-    result_df.to_csv(args.target_table_path, index=False)
+        result_mean_fullness_df = pandas.concat(
+            [pandas.DataFrame(dam_info), result_mean_fullness_df],
+            ignore_index=True)
+    result_mean_fullness_df['analysis_date'] = args.analysis_year_month_day
+    result_mean_fullness_df.to_csv(args.target_table_means_path, index=False)
+    print(
+        f"Dam 'mean fullness' table written to {args.target_table_means_path}")
 
 
 if __name__ == '__main__':
